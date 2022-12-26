@@ -1,6 +1,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <cuda_runtime_api.h> 
+#include <cuda.h> 
+#include <cooperative_groups.h>
+
+// EXCEPTION HANDLING FUNCTION TO PRINT ERRORS, 
+// SOURCED FROM THE INTERNET
+#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
+{
+   if (code != cudaSuccess) 
+   {
+      fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+      if (abort) exit(code);
+   }
+}
 
 // RANDOMLY INITIALIZE INPUT INTEGER ARRAY
 void init(int* array, int length) {
@@ -53,34 +68,52 @@ __global__ void checkOutputGpu(int* array, int length, bool* sorted) {
     }
 }
 
-// EACH THREAD SWAPS TWO ADJACENT ELEMENTS
-__global__ void gpuBubble(int* array, int length, int offset) {
-    int index = 2 * (blockDim.x * blockIdx.x + threadIdx.x) + offset;
+// EACH THREAD REPEATEDLY SWAPS ADJACENT ELEMENTS
+__global__ void gpuBubble(int* array, int length) {
+    int index = blockDim.x * blockIdx.x + threadIdx.x;
+    int temp;
 
-    if(index < length - (offset + 1)) {
-        if(array[index] > array[index + 1]) {
-            int temp = array[index];
-            array[index] = array[index + 1];
-            array[index + 1] = temp;
+    // CURRENTLY ONLY WORKS FOR SINGLE BLOCK CONFIGURATIONS, 
+    // DO NOT FORGET TO REPLACE group.sync() WITH __syncthreads()
+
+    cooperative_groups::grid_group group = cooperative_groups::this_grid(); 
+
+    for(int i = 0; i < length / 2; i++) {
+        if(!(index % 2) && index < length - 1) {
+            if(array[index] > array[index+1]) {
+                temp = array[index + 1];
+                array[index + 1] = array[index];
+                array[index] = temp;
+            }
         }
+        group.sync();
+        // __syncthreads();
+
+        if(index % 2 && index < length - 1) {
+            if(array[index] > array[index+1]) {
+                temp = array[index + 1];
+                array[index + 1] = array[index];
+                array[index] = temp;
+            }
+        }
+        group.sync();
+        // __syncthreads();
     }
 }
 
 int main(int argc, char* argv[]) {
     srand(time(NULL));
 
-    int length = 2048;
+    int length = 1024;
+    int threadX = 1024;
+    int gridX = (length / threadX) + (length % threadX ? 1 : 0);
+
     int* array = (int*) malloc(length * sizeof(int));
     
     // ALLOCATING SPACE FOR ARRAY ON THE GPU, AND OUTPUT ARRAY
     int* arrayGpu;
     int* outputGpu = (int*) malloc(length * sizeof(int));
     cudaMalloc(&arrayGpu, length * sizeof(int));
-
-    // ALLOCATING SPACE FOR THE SORTED FLAG
-    bool* h_sorted = (bool*) malloc(sizeof(bool));
-    bool* sorted;
-    cudaMalloc(&sorted, sizeof(bool));
 
     // INITIALIZING THE HOST AND DEVICE ARRAYS
     init(array, length);
@@ -113,27 +146,13 @@ int main(int argc, char* argv[]) {
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
 
-    // LOOP COUNTER
-    int iteration = 0;
-
     cudaEventRecord(start, 0);
 
-    // KERNEL INVOCATION AND SYNC TO HALT CPU UNTIL GPU WORK IS FINISHED
-    do {
-        gpuBubble<<<1, 1024>>>(arrayGpu, length, iteration % 2);
-        cudaDeviceSynchronize();
-
-        iteration++;
-        *h_sorted = true;
-        cudaMemcpy(sorted, h_sorted, sizeof(bool), cudaMemcpyHostToDevice);
-
-        checkOutputGpu<<<2, 1024>>>(arrayGpu, length, sorted);
-        cudaDeviceSynchronize();
-
-        cudaMemcpy(h_sorted, sorted, sizeof(bool), cudaMemcpyDeviceToHost);
-    } while(!(*h_sorted));
-
-    cudaDeviceSynchronize();
+    // INVOKE BUBBLE KERNEL, ASSUME OUTPUT IS SORTED, AND INVOKE OUTPUT CHECK KERNEL
+    // REPEAT UNTIL NONE OF THE THREADS IN OUTPUT CHECK KERNEL FIND ELEMENTS OUT OF ORDER
+    gpuBubble<<<gridX, threadX>>>(arrayGpu, length);
+    gpuErrchk(cudaDeviceSynchronize());
+    gpuErrchk(cudaGetLastError());
 
     // TIMING THE GPU EVENT
     cudaEventRecord(stop, 0);
@@ -147,6 +166,7 @@ int main(int argc, char* argv[]) {
 
     printf("Checking GPU output: ");
     checkOutput(outputGpu, length);
+    // printOutput(outputGpu, length);
 
     return 0;
 }
