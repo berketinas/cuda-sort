@@ -5,7 +5,7 @@
 int main(int argc, char* argv[]) {
     srand(time(NULL));
 
-    int length = 16384;
+    int length = 8192;
     int* block = (int*) malloc(sizeof(int));
     int* grid = (int*) malloc(sizeof(int));
 
