@@ -2,6 +2,6 @@
 #define BUBBLES_H
 
 void cpuBubble(int* array, int length);
-void gpuBubble(dim3 grid, dim3 block, int* array, int length);
+void gpuBubble(int* grid, int* block, int* array, int length);
 
 #endif

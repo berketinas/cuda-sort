@@ -3,7 +3,7 @@
 void handleError(cudaError_t code) {
     if(code != cudaSuccess) {
         fprintf(stderr, "GPU error: %s\n", cudaGetErrorString(code));
-        if(abort) exit(code);
+        exit(code);
     }
 }
 

@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <cuda_runtime_api.h> 
-#include <cuda.h> 
+#include <cuda.h>
+#include <cooperative_groups.h>
 
 #endif

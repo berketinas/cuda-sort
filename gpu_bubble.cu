@@ -1,6 +1,10 @@
+#include "includes.h"
+
 // WARP
 // ARRAY STORAGE IN C IS CONTIGUOUS IN MEMORY, COALESCING POSSIBLE
 // SHARED MEMORY IF LIMITED TO ONE BLOCK
+
+using namespace cooperative_groups;
 
 __device__ void d_swap(int* x, int* y) {
     int temp = *x;
@@ -12,30 +16,40 @@ __device__ void d_swap(int* x, int* y) {
 __global__ void kernel(int* array, int length) {
     int index = blockDim.x * blockIdx.x + threadIdx.x;
 
-    // CURRENTLY ONLY WORKS FOR SINGLE BLOCK CONFIGURATIONS, 
-    // DO NOT FORGET TO REPLACE group.sync() WITH __syncthreads()
-
-    // cooperative_groups::grid_group group = cooperative_groups::this_grid(); 
-
-    for(int i = 0; i < length / 2; i++) {
-        if(!(index % 2) && index < length - 1) {
-            if(array[index] > array[index+1]) {
-                d_swap(&array[index], &array[index + 1]);
+    auto g = this_grid();
+    
+    if(index < length - 1) {
+        for(int i = 0; i < length / 2; i++) {
+            if(!(index % 2)) {
+                if(array[index] > array[index + 1]) {
+                    d_swap(&array[index], &array[index + 1]);
+                }
             }
-        }
-        // group.sync();
-        __syncthreads();
+            g.sync();
 
-        if(index % 2 && index < length - 1) {
-            if(array[index] > array[index+1]) {
-                d_swap(&array[index], &array[index + 1]);
+            if(index % 2) {
+                if(array[index] > array[index + 1]) {
+                    d_swap(&array[index], &array[index + 1]);
+                }
             }
+            g.sync();
         }
-        // group.sync();
-        __syncthreads();
     }
 }
 
-void gpuBubble(dim3 grid, dim3 block, int* array, int length) {
-    kernel<<<grid, block>>>(array, length);
+void gpuBubble(int* grid, int* block, int* array, int length) {
+    int dev = 0;
+    int supportsCoopLaunch = 0;
+
+    cudaDeviceGetAttribute(&supportsCoopLaunch, cudaDevAttrCooperativeLaunch, dev);
+    printf("supports coop: %d\n", supportsCoopLaunch);
+
+    cudaDeviceProp deviceProp;
+    cudaGetDeviceProperties(&deviceProp, dev);
+    printf("MAX_BLOCKS: %d\n", deviceProp.maxBlocksPerMultiProcessor);
+    printf("MAX_THREADS_PER_BLOCK: %d\n", deviceProp.maxThreadsPerBlock);
+
+    void* args[] = { &array, &length };
+
+    cudaLaunchCooperativeKernel((void*) kernel, *grid, *block, args);
 }
