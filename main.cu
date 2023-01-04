@@ -5,12 +5,12 @@
 int main(int argc, char* argv[]) {
     srand(time(NULL));
 
-    int length = 8192;
+    int length = 1024;
     int* block = (int*) malloc(sizeof(int));
     int* grid = (int*) malloc(sizeof(int));
 
-    *block = 1024;
-    *grid = 16;
+    *block = 256;
+    *grid = 4;
 
     int* h_array = (int*) malloc(length * sizeof(int));
     

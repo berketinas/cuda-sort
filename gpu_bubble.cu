@@ -40,12 +40,15 @@ void gpuBubble(int* grid, int* block, int* array, int length) {
     int supportsCoopLaunch = 0;
 
     cudaDeviceGetAttribute(&supportsCoopLaunch, cudaDevAttrCooperativeLaunch, dev);
-    printf("supports coop: %d\n", supportsCoopLaunch);
+    printf("DEVICE_SUPPORTS_COOPERATIVE_LAUNCH: %d\n", supportsCoopLaunch);
 
     cudaDeviceProp deviceProp;
     cudaGetDeviceProperties(&deviceProp, dev);
-    printf("MAX_BLOCKS: %d\n", deviceProp.maxBlocksPerMultiProcessor);
-    printf("MAX_THREADS_PER_BLOCK: %d\n", deviceProp.maxThreadsPerBlock);
+    // printf("MAX_BLOCKS: %d\n", deviceProp.maxBlocksPerMultiProcessor);
+    // printf("MAX_THREADS_PER_BLOCK: %d\n", deviceProp.maxThreadsPerBlock);
+    printf("ARRAY SIZE: %d\n", length);
+    printf("BLOCKS ON GRID: %d\n", *grid);
+    printf("THREADS PER BLOCK: %d\n", *block);
 
     void* args[] = { &array, &length };
 
